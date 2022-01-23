@@ -25,3 +25,39 @@ endif()
 
 install(TARGETS foonathan_memory_node_size_debugger EXPORT foonathan_memoryTargets
                                                     RUNTIME DESTINATION ${FOONATHAN_MEMORY_RUNTIME_INSTALL_DIR})
+
+function(get_alignof_type type result_var)
+    # We expect this to fail - the purpose of this is to generate a
+    # compile error on a generated tyoe "align_of<type,value>" that is
+    # the alignment of the specified type.
+    try_compile(short_result ${CMAKE_CURRENT_BINARY_DIR}
+	SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp
+	COMPILE_DEFINITIONS "-DTEST_TYPE=${type}"
+	OUTPUT_VARIABLE short_output
+	)
+
+    # Look for the align_of<..., ##> in the compiler error output
+    string(REGEX MATCH "align_of<.*,[ ]*([0-9]+)>" align_of_matched ${short_output})
+
+    if(align_of_matched)
+	set(${result_var} ${CMAKE_MATCH_1} PARENT_SCOPE)
+    else()
+	message(FATAL_ERROR "Unable to determine alignment of C++ type ${type} - no error text matching align_of<..., ##> in compiler output")
+    endif()
+endfunction()
+
+# These two lists will contain a set of types with unique alignments.
+set(ALIGNMENTS )
+set(TYPES )
+
+foreach(type IN ITEMS char bool short int long "long long" float double "long double")
+    get_alignof_type("${type}" alignment)
+    message("Alignment of '${type}' is '${alignment}'")
+
+    if(NOT ${alignment} IN_LIST ALIGNMENTS)
+	list(APPEND ALIGNMENTS ${alignment})
+	list(APPEND TYPES ${type})
+    endif()
+endforeach()
+
+message("=> alignments |${ALIGNMENTS}| types |${TYPES}|")
