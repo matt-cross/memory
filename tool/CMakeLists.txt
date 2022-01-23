@@ -30,14 +30,14 @@ function(get_alignof_type type result_var)
     # We expect this to fail - the purpose of this is to generate a
     # compile error on a generated tyoe "align_of<type,value>" that is
     # the alignment of the specified type.
-    try_compile(short_result ${CMAKE_CURRENT_BINARY_DIR}
+    try_compile(align_result ${CMAKE_CURRENT_BINARY_DIR}
 	SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp
 	COMPILE_DEFINITIONS "-DTEST_TYPE=${type}"
-	OUTPUT_VARIABLE short_output
+	OUTPUT_VARIABLE align_output
 	)
 
     # Look for the align_of<..., ##> in the compiler error output
-    string(REGEX MATCH "align_of<.*,[ ]*([0-9]+)>" align_of_matched ${short_output})
+    string(REGEX MATCH "align_of<.*,[ ]*([0-9]+)>" align_of_matched ${align_output})
 
     if(align_of_matched)
 	set(${result_var} ${CMAKE_MATCH_1} PARENT_SCOPE)
@@ -61,3 +61,11 @@ foreach(type IN ITEMS char bool short int long "long long" float double "long do
 endforeach()
 
 message("=> alignments |${ALIGNMENTS}| types |${TYPES}|")
+
+try_compile(node_result ${CMAKE_CURRENT_BINARY_DIR}
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp
+    COMPILE_DEFINITIONS "-DTEST_TYPE=int" "-DCONTAINER_TYPE=forward_list_container"
+    OUTPUT_VARIABLE node_output
+    )
+
+message(FATAL_ERROR "node_result |${node_result}| node_output |${node_output}|")
