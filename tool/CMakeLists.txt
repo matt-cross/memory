@@ -30,11 +30,20 @@ function(get_alignof_type type result_var)
     # We expect this to fail - the purpose of this is to generate a
     # compile error on a generated tyoe "align_of<type,value>" that is
     # the alignment of the specified type.
-    try_compile(align_result ${CMAKE_CURRENT_BINARY_DIR}
-	SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp
-	COMPILE_DEFINITIONS "-DTEST_TYPE=${type}"
-	OUTPUT_VARIABLE align_output
-	)
+    if(FALSE)
+	try_compile(align_result ${CMAKE_CURRENT_BINARY_DIR}
+	    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp
+	    COMPILE_DEFINITIONS "-DTEST_TYPE=${type}"
+	    OUTPUT_VARIABLE align_output
+	    )
+    else()
+	execute_process(
+	    COMMAND ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp -o /dev/null "-DTEST_TYPE=${type}"
+	    RESULT_VARIABLE align_result
+	    OUTPUT_VARIABLE align_output
+	    ERROR_VARIABLE align_output
+	    )
+    endif()
 
     # Look for the align_of<..., ##> in the compiler error output
     string(REGEX MATCH "align_of<.*,[ ]*([0-9]+)>" align_of_matched ${align_output})
@@ -42,7 +51,7 @@ function(get_alignof_type type result_var)
     if(align_of_matched)
 	set(${result_var} ${CMAKE_MATCH_1} PARENT_SCOPE)
     else()
-	message(FATAL_ERROR "Unable to determine alignment of C++ type ${type} - no error text matching align_of<..., ##> in compiler output")
+	message(FATAL_ERROR "Unable to determine alignment of C++ type ${type} - no error text matching align_of<..., ##> in compiler output |${align_output}|")
     endif()
 endfunction()
 
@@ -50,7 +59,8 @@ endfunction()
 set(ALIGNMENTS )
 set(TYPES )
 
-foreach(type IN ITEMS char bool short int long "long long" float double "long double")
+set(ALL_TYPES char bool short int long "long long" float double "long double")
+foreach(type IN LISTS ALL_TYPES )
     get_alignof_type("${type}" alignment)
     message("Alignment of '${type}' is '${alignment}'")
 
@@ -62,10 +72,53 @@ endforeach()
 
 message("=> alignments |${ALIGNMENTS}| types |${TYPES}|")
 
-try_compile(node_result ${CMAKE_CURRENT_BINARY_DIR}
-    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp
-    COMPILE_DEFINITIONS "-DTEST_TYPE=int" "-DCONTAINER_TYPE=forward_list_container"
-    OUTPUT_VARIABLE node_output
+function(get_node_size_of container type result_var)
+    # We expect this to fail - the purpose of this is to generate a
+    # compile error on a generated type "node_size_of<type_size,node_size,is_node_size>" that is
+    # the alignment of the specified type.
+    if(FALSE)
+	try_compile(nodesize_result ${CMAKE_CURRENT_BINARY_DIR}
+	    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp
+	    COMPILE_DEFINITIONS "-DCONTAINER_TYPE=${container}" "-DTEST_TYPE=${type}"
+	    OUTPUT_VARIABLE nodesize_output
+	    )
+    else()
+	execute_process(
+	    COMMAND ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp -o /dev/null
+	        "-DCONTAINER_TYPE=${container}"
+	        "-DTEST_TYPE=${type}"
+	    RESULT_VARIABLE nodesize_result
+	    OUTPUT_VARIABLE nodesize_output
+	    ERROR_VARIABLE nodesize_output
+	    )
+    endif()
+
+    # Look for the align_of<..., ##> in the compiler error output
+    string(REGEX MATCH "node_size_of<[ ]*[0-9]+[ ]*,[ ]*([0-9]+)[ ]*,[ ]*true[ ]*>" node_size_of_matched ${nodesize_output})
+
+    if(node_size_of_matched)
+	set(${result_var} ${CMAKE_MATCH_1} PARENT_SCOPE)
+    else()
+	message(FATAL_ERROR "Unable to determine node size of C++ container ${container} holding type ${type} - no error text matching node_size_of<##, ##, true> in compiler output |${nodesize_output}|")
+    endif()
+endfunction()
+
+set(CONTAINER_TYPES
+    forward_list_container list_container
+    set_container multiset_container unordered_set_container unordered_multiset_container
+    map_container multimap_container unordered_map_container unordered_multimap_container
+    shared_ptr_stateless_container shared_ptr_stateful_container
     )
 
-message(FATAL_ERROR "node_result |${node_result}| node_output |${node_output}|")
+foreach(container IN LISTS CONTAINER_TYPES)
+    list(LENGTH TYPES num_types)
+    math(EXPR last_type_index "${num_types} - 1")
+    foreach(index RANGE ${last_type_index})
+	list(GET TYPES ${index} type)
+	list(GET ALIGNMENTS ${index} alignment)
+	
+	get_node_size_of("${container}" "${type}" node_size)
+	message("node size of |${container}| holding a |${type}| with alignment |${alignment}| is |${node_size}|")
+    endforeach()
+endforeach()
+
