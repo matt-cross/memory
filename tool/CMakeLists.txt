@@ -79,13 +79,13 @@ function(get_node_size_of container type result_var)
     if(FALSE)
 	try_compile(nodesize_result ${CMAKE_CURRENT_BINARY_DIR}
 	    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp
-	    COMPILE_DEFINITIONS "-DCONTAINER_TYPE=${container}" "-DTEST_TYPE=${type}"
+	    COMPILE_DEFINITIONS "-D${container}=1" "-DTEST_TYPE=${type}"
 	    OUTPUT_VARIABLE nodesize_output
 	    )
     else()
 	execute_process(
 	    COMMAND ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp -o /dev/null
-	        "-DCONTAINER_TYPE=${container}"
+	        "-D${container}=1"
 	        "-DTEST_TYPE=${type}"
 	    RESULT_VARIABLE nodesize_result
 	    OUTPUT_VARIABLE nodesize_output
@@ -104,10 +104,10 @@ function(get_node_size_of container type result_var)
 endfunction()
 
 set(CONTAINER_TYPES
-    forward_list_container list_container
-    set_container multiset_container unordered_set_container unordered_multiset_container
-    map_container multimap_container unordered_map_container unordered_multimap_container
-    shared_ptr_stateless_container shared_ptr_stateful_container
+    FORWARD_LIST_CONTAINER LIST_CONTAINER
+    SET_CONTAINER MULTISET_CONTAINER UNORDERED_SET_CONTAINER UNORDERED_MULTISET_CONTAINER
+    MAP_CONTAINER MULTIMAP_CONTAINER UNORDERED_MAP_CONTAINER UNORDERED_MULTIMAP_CONTAINER
+    SHARED_PTR_STATELESS_CONTAINER SHARED_PTR_STATEFUL_CONTAINER
     )
 
 foreach(container IN LISTS CONTAINER_TYPES)
