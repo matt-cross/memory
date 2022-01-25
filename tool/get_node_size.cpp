@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <tuple>
 
 #if FORWARD_LIST_CONTAINER
 #include <forward_list>
@@ -25,7 +26,7 @@
 // This will fail to compile when is_node_size is true, which will
 // cause the compiler to print this type with the calculated numbers
 // in corresponding parameters.
-template<size_t type_size, size_t node_size, bool is_node_size=false>
+template<size_t type_align, size_t node_size, bool is_node_size=false>
 struct node_size_of
 {
     static_assert(!is_node_size, "Expected to fail");
@@ -50,7 +51,7 @@ struct is_same<T,T>
 // this allocator is rebound to the node type.
 template<typename T, typename State = empty_state, bool SubtractTSize = true, typename InitialType = T>
 struct debug_allocator :
-    public node_size_of<sizeof(InitialType),
+    public node_size_of<alignof(InitialType),
 			sizeof(T) - (SubtractTSize ? sizeof(InitialType) : 0),
 			!is_same<InitialType,T>::value>,
     private State
@@ -200,4 +201,11 @@ int test_container()
 }
 #endif // SHARED_PTR_STATEFUL_CONTAINER
 
-int foo = test_container<TEST_TYPE>();
+template<typename... Types>
+int test_all(std::tuple<Types...>)
+{
+    int dummy[] = {(test_container<Types>())...};
+    return 0;
+}
+
+int foo = test_all(std::tuple<TEST_TYPES>());

@@ -38,7 +38,7 @@ function(get_alignof_type type result_var)
 	    )
     else()
 	execute_process(
-	    COMMAND ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp -o /dev/null "-DTEST_TYPE=${type}"
+	    COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_align_of.cpp -o /dev/null "-DTEST_TYPE=${type}"
 	    RESULT_VARIABLE align_result
 	    OUTPUT_VARIABLE align_output
 	    ERROR_VARIABLE align_output
@@ -72,34 +72,57 @@ endforeach()
 
 message("=> alignments |${ALIGNMENTS}| types |${TYPES}|")
 
-function(get_node_size_of container type result_var)
+function(get_node_size_of container types align_result_var nodesize_result_var)
+    # The argument 'types' is a CMake list, which is semicolon separated.  Convert it to a comma separated list.
+    set(comma_types )
+    foreach(type IN LISTS types)
+	if(comma_types)
+	    string(APPEND comma_types ",${type}")
+	else()
+	    set(comma_types "${type}")
+	endif()
+    endforeach()
+
     # We expect this to fail - the purpose of this is to generate a
     # compile error on a generated type "node_size_of<type_size,node_size,is_node_size>" that is
     # the alignment of the specified type.
     if(FALSE)
 	try_compile(nodesize_result ${CMAKE_CURRENT_BINARY_DIR}
 	    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp
-	    COMPILE_DEFINITIONS "-D${container}=1" "-DTEST_TYPE=${type}"
+	    COMPILE_DEFINITIONS "-D${container}=1" "-DTEST_TYPES=${comma_types}"
 	    OUTPUT_VARIABLE nodesize_output
 	    )
     else()
 	execute_process(
-	    COMMAND ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp -o /dev/null
+	    COMMAND ${CMAKE_CXX_COMPILER} ${CMAKE_CXX_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/get_node_size.cpp -o /dev/null
 	        "-D${container}=1"
-	        "-DTEST_TYPE=${type}"
+	        "-DTEST_TYPES=${comma_types}"
 	    RESULT_VARIABLE nodesize_result
 	    OUTPUT_VARIABLE nodesize_output
 	    ERROR_VARIABLE nodesize_output
 	    )
     endif()
 
-    # Look for the align_of<..., ##> in the compiler error output
-    string(REGEX MATCH "node_size_of<[ ]*[0-9]+[ ]*,[ ]*([0-9]+)[ ]*,[ ]*true[ ]*>" node_size_of_matched ${nodesize_output})
+    # Gather all node_size_of<..., ##> in the compiler error output
+    string(REGEX MATCHALL "node_size_of<[ ]*[0-9]+[ ]*,[ ]*[0-9]+[ ]*,[ ]*true[ ]*>" node_size_of_matches ${nodesize_output})
 
-    if(node_size_of_matched)
-	set(${result_var} ${CMAKE_MATCH_1} PARENT_SCOPE)
+    if(node_size_of_matches)
+	set(alignments )
+	set(node_sizes )
+
+	foreach(node_size IN LISTS node_size_of_matches)
+	    # Extract the alignment and node size
+	    string(REGEX MATCH "([0-9]+)[ ]*,[ ]*([0-9]+)" match_result ${node_size})
+	    if(match_result AND NOT ${CMAKE_MATCH_1} IN_LIST alignments)
+		list(APPEND alignments ${CMAKE_MATCH_1})
+		list(APPEND node_sizes ${CMAKE_MATCH_2})
+	    endif()
+	endforeach()
+
+	set(${align_result_var} ${alignments} PARENT_SCOPE)
+	set(${nodesize_result_var} ${node_sizes} PARENT_SCOPE)
     else()
-	message(FATAL_ERROR "Unable to determine node size of C++ container ${container} holding type ${type} - no error text matching node_size_of<##, ##, true> in compiler output |${nodesize_output}|")
+	message(FATAL_ERROR "Unable to determine node size of C++ container ${container} holding types ${types} - no error text matching node_size_of<##, ##, true> in compiler output |${nodesize_output}|")
     endif()
 endfunction()
 
@@ -112,13 +135,7 @@ set(CONTAINER_TYPES
 
 foreach(container IN LISTS CONTAINER_TYPES)
     list(LENGTH TYPES num_types)
-    math(EXPR last_type_index "${num_types} - 1")
-    foreach(index RANGE ${last_type_index})
-	list(GET TYPES ${index} type)
-	list(GET ALIGNMENTS ${index} alignment)
-	
-	get_node_size_of("${container}" "${type}" node_size)
-	message("node size of |${container}| holding a |${type}| with alignment |${alignment}| is |${node_size}|")
-    endforeach()
+    get_node_size_of("${container}" "${TYPES}" alignments node_sizes)
+    message("node size of |${container}| holding types |${TYPES}| : alignments |${alignments}| node sizes |${node_sizes}|")
 endforeach()
 
