@@ -126,22 +126,69 @@ endfunction()
 # the specified type.
 function(get_container_node_sizes outfile)
 
+    # Build up the file contents in the variable NODE_SIZE_CONTENTS,
+    # as requested in container_node_sizes_impl.hpp.in
+    set(NODE_SIZE_CONTENTS "")
+
+    # Get the set of uniquely aligned types to work with
     unique_aligned_types(types alignments)
     message("=> alignments |${alignments}| types |${types}|")
 
     set(container_types
-	FORWARD_LIST_CONTAINER LIST_CONTAINER
-	SET_CONTAINER MULTISET_CONTAINER UNORDERED_SET_CONTAINER UNORDERED_MULTISET_CONTAINER
-	MAP_CONTAINER MULTIMAP_CONTAINER UNORDERED_MAP_CONTAINER UNORDERED_MULTIMAP_CONTAINER
-	SHARED_PTR_STATELESS_CONTAINER SHARED_PTR_STATEFUL_CONTAINER
+	forward_list list
+	set multiset unordered_set unordered_multiset
+	map multimap unordered_map unordered_multimap
+	shared_ptr_stateless shared_ptr_stateful
 	)
 
     foreach(container IN LISTS container_types)
-	list(LENGTH TYPES num_types)
-	get_node_sizes_of("${container}" "${types}" alignments node_sizes)
-	message("node size of |${container}| holding types |${types}| : alignments |${alignments}| node sizes |${node_sizes}|")
+	string(TOUPPER "${container}_container" container_macro_name)
+	get_node_sizes_of("${container_macro_name}" "${types}" alignments node_sizes)
+	message("node size of |${container_macro_name}| holding types |${types}| : alignments |${alignments}| node sizes |${node_sizes}|")
+
+	# Generate the contents for this container type
+	string(APPEND NODE_SIZE_CONTENTS "\
+
+namespace detail
+{
+    template <std::size_t Alignment>
+    struct ${container}_node_size;
+")
+
+	list(LENGTH alignments n_alignments)
+	math(EXPR last_alignment "${n_alignments}-1")
+	foreach(index RANGE ${last_alignment})
+	    list(GET alignments ${index} alignment)
+	    list(GET node_sizes ${index} node_size)
+
+	    # Generate content for this alignment/node size in this container
+	    string(APPEND NODE_SIZE_CONTENTS "\
+
+    template <>
+    struct ${container}_node_size<${alignment}>
+    : std::integral_constant<std::size_t, ${node_size}>
+    {};
+")
+	endforeach()
+	
+	# End contents for this container type
+	string(APPEND NODE_SIZE_CONTENTS "\
+} // namespace detail
+
+template <typename T>
+struct ${container}_node_size
+: std::integral_constant<std::size_t,
+       detail::${container}_node_size<alignof(T)>::value + sizeof(T)>
+{};
+")
     endforeach()
+
+    # Finally, write the file.  As a reminder, configure_file() will
+    # substitute in any CMake variables wrapped in @VAR@ in the inpout
+    # file and write them to the output file; and will only rewrite
+    # the file and update its timestamp if the contents have changed.
+    # The only variable that will be substituted is NODE_SIZE_CONTENTS
+    configure_file("${_THIS_MODULE_DIR}/container_node_sizes_impl.hpp.in" ${outfile})
 endfunction()
 
-get_container_node_sizes("/dev/null")
-
+get_container_node_sizes("${CMAKE_CURRENT_BINARY_DIR}/cmake_container_node_sizes_impl.hpp")
